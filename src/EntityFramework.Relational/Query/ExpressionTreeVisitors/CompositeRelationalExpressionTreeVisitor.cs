@@ -9,6 +9,10 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
 {
     public class CompositePredicateExpressionTreeVisitor : ExpressionTreeVisitor
     {
+        public CompositePredicateExpressionTreeVisitor()
+        {
+        }
+
         public override Expression VisitExpression(
             [NotNull]Expression expression)
         {
@@ -35,6 +39,14 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
             if (negationOptimized != null)
             {
                 currentExpression = negationOptimized;
+            }
+
+            var nullSemanticsExpanded =
+                new PredicateNullSemanticsExpandingVisitor().VisitExpression(currentExpression);
+
+            if (nullSemanticsExpanded != null)
+            {
+                currentExpression = nullSemanticsExpanded;
             }
 
             return currentExpression;

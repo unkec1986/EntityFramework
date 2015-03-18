@@ -19,7 +19,13 @@ namespace Microsoft.Data.Entity.SqlServer.FunctionalTests
             base.Compare_bool_with_bool_equal();
 
             Assert.Equal(
-                @"TBD",
+                @"SELECT [e].[Id]
+FROM [NullSemanticsEntity1] AS [e]
+WHERE [e].[BoolA] = [e].[BoolB]
+
+SELECT [e].[Id]
+FROM [NullSemanticsEntity1] AS [e]
+WHERE (([e].[NullableBoolA] = [e].[NullableBoolB]) OR ([e].[NullableBoolA] IS NULL AND [e].[NullableBoolB] IS NULL)) AND (([e].[NullableBoolA] IS NOT NULL AND [e].[NullableBoolB] IS NOT NULL) OR ([e].[NullableBoolA] IS NULL AND [e].[NullableBoolB] IS NULL))",
                 Sql);
         }
 
