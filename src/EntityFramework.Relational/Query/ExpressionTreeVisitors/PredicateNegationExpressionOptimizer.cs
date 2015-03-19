@@ -10,6 +10,8 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
 {
     public class PredicateNegationExpressionOptimizer : ExpressionTreeVisitor
     {
+        private IDictionary<string, object> _parameterValues;
+
         private static Dictionary<ExpressionType, ExpressionType> _nodeTypeMapping
             = new Dictionary<ExpressionType, ExpressionType>
             {
@@ -19,38 +21,65 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                 { ExpressionType.LessThan, ExpressionType.GreaterThanOrEqual },
             };
 
-        //protected override Expression VisitBinaryExpression(
-        //    [NotNull]BinaryExpression expression)
-        //{
-        //    var currentExpression = expression;
-        //    if (currentExpression.NodeType == ExpressionType.Equal 
-        //        || currentExpression.NodeType == ExpressionType.NotEqual)
-        //    {
-        //        var leftUnary = currentExpression.Left as UnaryExpression;
-        //        if (leftUnary != null && leftUnary.NodeType == ExpressionType.Not)
-        //        {
-        //            // e.g. !a == b -> a != b
-        //            currentExpression = currentExpression.NodeType == ExpressionType.Equal
-        //                ? Expression.MakeBinary(
-        //                    ExpressionType.NotEqual, leftUnary.Operand, currentExpression.Right)
-        //                : Expression.MakeBinary(
-        //                    ExpressionType.Equal, leftUnary.Operand, currentExpression.Right);
-        //        }
+        public PredicateNegationExpressionOptimizer(IDictionary<string, object> parameterValues)
+        {
+            _parameterValues = parameterValues;
+        }
 
-        //        var rightUnary = currentExpression.Right as UnaryExpression;
-        //        if (rightUnary != null && rightUnary.NodeType == ExpressionType.Not)
-        //        {
-        //            // e.g. a != !b -> a == b
-        //            currentExpression = currentExpression.NodeType == ExpressionType.Equal
-        //                ? Expression.MakeBinary(
-        //                    ExpressionType.NotEqual, currentExpression.Left, rightUnary.Operand)
-        //                : Expression.MakeBinary(
-        //                    ExpressionType.Equal, currentExpression.Left, rightUnary.Operand);
-        //        }
-        //    }
+        protected override Expression VisitBinaryExpression(
+            [NotNull]BinaryExpression expression)
+        {
+            var currentExpression = expression;
+            if (currentExpression.NodeType == ExpressionType.Equal
+                || currentExpression.NodeType == ExpressionType.NotEqual)
+            {
+                var leftUnary = currentExpression.Left as UnaryExpression;
+                if (leftUnary != null && leftUnary.NodeType == ExpressionType.Not)
+                {
+                    var leftNullable = ExtractNullableExpressions(leftUnary.Operand).Count > 0;
+                    var rightNullable = ExtractNullableExpressions(currentExpression.Right).Count > 0;
 
-        //    return base.VisitBinaryExpression(currentExpression);
-        //}
+                    if (!leftNullable && !rightNullable)
+                    {
+                        // e.g. !a == b -> a != b
+                        currentExpression = currentExpression.NodeType == ExpressionType.Equal
+                            ? Expression.MakeBinary(
+                                ExpressionType.NotEqual, leftUnary.Operand, currentExpression.Right)
+                            : Expression.MakeBinary(
+                                ExpressionType.Equal, leftUnary.Operand, currentExpression.Right);
+                    }
+                }
+
+                var rightUnary = currentExpression.Right as UnaryExpression;
+                if (rightUnary != null && rightUnary.NodeType == ExpressionType.Not)
+                {
+                    var leftNullable = ExtractNullableExpressions(leftUnary.Operand).Count > 0;
+                    var rightNullable = ExtractNullableExpressions(currentExpression.Right).Count > 0;
+
+                    if (!leftNullable && !rightNullable)
+                    {
+                        // e.g. a != !b -> a == b
+                        currentExpression = currentExpression.NodeType == ExpressionType.Equal
+                        ? Expression.MakeBinary(
+                            ExpressionType.NotEqual, currentExpression.Left, rightUnary.Operand)
+                        : Expression.MakeBinary(
+                            ExpressionType.Equal, currentExpression.Left, rightUnary.Operand);
+                    }
+                }
+            }
+
+            return base.VisitBinaryExpression(currentExpression);
+        }
+
+        private List<Expression> ExtractNullableExpressions(Expression expression)
+        {
+            var nullableExpressionsExtractor = new NullableExpressionsExtractingVisitor(
+                _parameterValues);
+
+            nullableExpressionsExtractor.VisitExpression(expression);
+
+            return nullableExpressionsExtractor.NullableExpressions;
+        }
 
         protected override Expression VisitUnaryExpression(
             [NotNull]UnaryExpression expression)

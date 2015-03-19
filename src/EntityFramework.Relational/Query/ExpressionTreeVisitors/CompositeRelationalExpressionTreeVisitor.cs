@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.Collections.Generic;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Remotion.Linq.Parsing;
@@ -9,8 +10,11 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
 {
     public class CompositePredicateExpressionTreeVisitor : ExpressionTreeVisitor
     {
-        public CompositePredicateExpressionTreeVisitor()
+        private IDictionary<string, object> _parameterValues;
+
+        public CompositePredicateExpressionTreeVisitor(IDictionary<string, object> parameterValues)
         {
+            _parameterValues = parameterValues;
         }
 
         public override Expression VisitExpression(
@@ -25,37 +29,30 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                 currentExpression = inExpressionOptimized;
             }
 
-            var negationOptimized1 =
-                new PredicateNegationExpressionOptimizer().VisitExpression(currentExpression);
+            var negationOptimized =
+                new PredicateNegationExpressionOptimizer(_parameterValues)
+                .VisitExpression(currentExpression);
 
-            if (negationOptimized1 != null)
+            if (negationOptimized != null)
             {
-                currentExpression = negationOptimized1;
+                currentExpression = negationOptimized;
             }
 
-            var equalityExpanded = 
-                new EqualityPredicateExpandingVisitor().VisitExpression(currentExpression);
+            var equalityExpanded =
+                new EqualityPredicateExpandingVisitor(_parameterValues).VisitExpression(currentExpression);
 
             if (equalityExpanded != null)
             {
                 currentExpression = equalityExpanded;
             }
 
-            var negationOptimized2 =
-                new PredicateNegationExpressionOptimizer().VisitExpression(currentExpression);
+            var nullSemanticsExpanded =
+                new PredicateNullSemanticsExpandingVisitor(_parameterValues).VisitExpression(currentExpression);
 
-            if (negationOptimized2 != null)
+            if (nullSemanticsExpanded != null)
             {
-                currentExpression = negationOptimized2;
+                currentExpression = nullSemanticsExpanded;
             }
-
-            //var nullSemanticsExpanded =
-            //    new PredicateNullSemanticsExpandingVisitor().VisitExpression(currentExpression);
-
-            //if (nullSemanticsExpanded != null)
-            //{
-            //    currentExpression = nullSemanticsExpanded;
-            //}
 
             return currentExpression;
         }

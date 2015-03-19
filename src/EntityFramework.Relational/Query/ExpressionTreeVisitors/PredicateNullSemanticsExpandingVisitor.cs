@@ -1,11 +1,9 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using Microsoft.Data.Entity.Relational.Query.Expressions;
-using Remotion.Linq.Clauses.Expressions;
 using Remotion.Linq.Parsing;
 
 namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
@@ -26,78 +24,22 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                 var left = VisitExpression(expression.Left);
                 var right = VisitExpression(expression.Right);
 
-                var leftNullables = ExtractNullableExpressions(expression.Left);
-                var rightNullables = ExtractNullableExpressions(expression.Right);
+                var leftNullables = ExtractNullableExpressions(left);
+                var rightNullables = ExtractNullableExpressions(right);
                 var leftNullable = leftNullables.Count > 0;
                 var rightNullable = rightNullables.Count > 0;
 
                 if (expression.NodeType == ExpressionType.Equal)
                 {
+                    var leftUnary = left as UnaryExpression;
+                    if (leftUnary != null && leftUnary.NodeType == ExpressionType.Not)
+                    {
+                        return ExpandNegatedNullableEqualNullable(leftUnary.Operand, right, leftNullables, rightNullables);
+                    }
+
                     if (leftNullable && rightNullable)
                     {
-                        // [(a == b) || (a == null && b == null)] && [(a != null && b != null) || (a is null && b is null)]
-                        //
-                        // a | b | F1 = a == b | F2 = (a == null && b == null) | F3 = F1 OR F2 | 
-                        //   |   |             |                               |               |
-                        // 0 | 0 | 1           | 0                             | 1             |
-                        // 0 | 1 | 0           | 0                             | 0             |
-                        // 0 | N | N           | 0                             | N             |
-                        // 1 | 0 | 0           | 0                             | 0             |
-                        // 1 | 1 | 1           | 0                             | 1             |
-                        // 1 | N | N           | 0                             | N             |
-                        // N | 0 | N           | 0                             | N             |
-                        // N | 1 | N           | 0                             | N             |
-                        // N | N | N           | 1                             | 1             |
-                        //
-                        // a | b | f1 = (a != null && b != null) | f2 = (a == null && b == null) | F3 = F1 OR F2 | 
-                        //   |   |                               |                               |               |
-                        // 0 | 0 | 1                             | 0                             | 1             |
-                        // 0 | 1 | 1                             | 0                             | 1             |
-                        // 0 | N | 0                             | 0                             | 0             |
-                        // 1 | 0 | 1                             | 0                             | 1             |
-                        // 1 | 1 | 1                             | 0                             | 1             |
-                        // 1 | N | 0                             | 0                             | 0             |
-                        // N | 0 | 0                             | 0                             | 0             |
-                        // N | 1 | 0                             | 0                             | 0             |
-                        // N | N | 0                             | 1                             | 1             |
-                        //
-                        // a | b | Final = F3 && f3 | 
-                        //   |   |                  |
-                        // 0 | 0 | 1 && 1 = 1       |
-                        // 0 | 1 | 0 && 1 = 0       |
-                        // 0 | N | N && 0 = 0       |
-                        // 1 | 0 | 0 && 1 = 0       |
-                        // 1 | 1 | 1 && 1 = 1       |
-                        // 1 | N | N && 0 = 0       |
-                        // N | 0 | N && 0 = 0       |
-                        // N | 1 | N && 0 = 0       |
-                        // N | N | 1 && 1 = 1       |
-
-                        return Expression.AndAlso(
-                            Expression.OrElse(
-                                Expression.Equal(left, right),
-                                Expression.AndAlso(
-                                    BuildIsNullExpression(leftNullables),
-                                    BuildIsNullExpression(rightNullables)
-                                    //new IsNullExpression(left),
-                                    //new IsNullExpression(right)
-                                )
-                            ),
-                            Expression.OrElse(
-                                Expression.AndAlso(
-                                    BuildIsNotNullExpression(leftNullables),
-                                    BuildIsNotNullExpression(rightNullables)
-                                    //Expression.Not(new IsNullExpression(left)),
-                                    //Expression.Not(new IsNullExpression(right))
-                                ),
-                                Expression.AndAlso(
-                                    BuildIsNullExpression(leftNullables),
-                                    BuildIsNullExpression(rightNullables)
-                                    //new IsNullExpression(left),
-                                    //new IsNullExpression(right)
-                                )
-                            )
-                        );
+                        return ExpandNullableEqualNullable(left, right, leftNullables, rightNullables);
                     }
 
                     if (leftNullable && !rightNullable)
@@ -115,7 +57,6 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                         return Expression.AndAlso(
                             Expression.Equal(left, right),
                             BuildIsNotNullExpression(leftNullables));
-                            //Expression.Not(new IsNullExpression(left)));
                     }
 
                     if (!leftNullable && rightNullable)
@@ -133,7 +74,6 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                         var expanded = Expression.AndAlso(
                             Expression.Equal(left, right),
                             BuildIsNotNullExpression(rightNullables));
-                            //Expression.Not(new IsNullExpression(right)));
                     }
                 }
 
@@ -178,29 +118,22 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                         // N | 0 | N OR 1 = 1       |
                         // N | 1 | N OR 1 = 1       |
                         // N | N | 0 OR 0 = 0       |
-
                         return Expression.OrElse(
                             Expression.AndAlso(
                                 Expression.NotEqual(left, right),
                                 Expression.OrElse(
                                     BuildIsNotNullExpression(leftNullables),
                                     BuildIsNotNullExpression(rightNullables)
-                                    //Expression.Not(new IsNullExpression(left)),
-                                    //Expression.Not(new IsNullExpression(right))
                                 )
                             ),
                             Expression.OrElse(
                                 Expression.AndAlso(
                                     BuildIsNullExpression(leftNullables),
                                     BuildIsNotNullExpression(rightNullables)
-                                    //new IsNullExpression(left),
-                                    //Expression.Not(new IsNullExpression(right))
                                 ),
                                 Expression.AndAlso(
                                     BuildIsNotNullExpression(leftNullables),
                                     BuildIsNullExpression(rightNullables)
-                                    //Expression.Not(new IsNullExpression(left)),
-                                    //new IsNullExpression(right)
                                 )
                             )
                         );
@@ -218,11 +151,9 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                         // 1 | 1 | 0           | 0              | 0             |
                         // N | 0 | N           | 1              | 1             |
                         // N | 1 | N           | 1              | 1             |
-
                         return Expression.OrElse(
                             Expression.NotEqual(left, right),
                             BuildIsNullExpression(leftNullables));
-                            //new IsNullExpression(left));
                     }
 
                     if (!leftNullable && rightNullable)
@@ -237,16 +168,105 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                         // 1 | 0 | 1           | 0              | 1             |
                         // 1 | 1 | 0           | 0              | 0             |
                         // 1 | N | N           | 1              | 1             |
-
                         return Expression.OrElse(
                             Expression.NotEqual(left, right),
                             BuildIsNullExpression(rightNullables));
-                            //new IsNullExpression(right));
                     }
                 }
             }
 
             return base.VisitBinaryExpression(expression);
+        }
+
+        private Expression ExpandNullableEqualNullable(
+            Expression left, 
+            Expression right, 
+            List<Expression >leftNullables, 
+            List<Expression> rightNullables)
+        {
+            // [(a == b) || (a == null && b == null)] && [(a != null && b != null) || (a is null && b is null)]
+            //
+            // a | b | F1 = a == b | F2 = (a == null && b == null) | F3 = F1 OR F2 | 
+            //   |   |             |                               |               |
+            // 0 | 0 | 1           | 0                             | 1             |
+            // 0 | 1 | 0           | 0                             | 0             |
+            // 0 | N | N           | 0                             | N             |
+            // 1 | 0 | 0           | 0                             | 0             |
+            // 1 | 1 | 1           | 0                             | 1             |
+            // 1 | N | N           | 0                             | N             |
+            // N | 0 | N           | 0                             | N             |
+            // N | 1 | N           | 0                             | N             |
+            // N | N | N           | 1                             | 1             |
+            //
+            // a | b | f1 = (a != null && b != null) | f2 = (a == null && b == null) | F3 = F1 OR F2 | 
+            //   |   |                               |                               |               |
+            // 0 | 0 | 1                             | 0                             | 1             |
+            // 0 | 1 | 1                             | 0                             | 1             |
+            // 0 | N | 0                             | 0                             | 0             |
+            // 1 | 0 | 1                             | 0                             | 1             |
+            // 1 | 1 | 1                             | 0                             | 1             |
+            // 1 | N | 0                             | 0                             | 0             |
+            // N | 0 | 0                             | 0                             | 0             |
+            // N | 1 | 0                             | 0                             | 0             |
+            // N | N | 0                             | 1                             | 1             |
+            //
+            // a | b | Final = F3 && f3 | 
+            //   |   |                  |
+            // 0 | 0 | 1 && 1 = 1       |
+            // 0 | 1 | 0 && 1 = 0       |
+            // 0 | N | N && 0 = 0       |
+            // 1 | 0 | 0 && 1 = 0       |
+            // 1 | 1 | 1 && 1 = 1       |
+            // 1 | N | N && 0 = 0       |
+            // N | 0 | N && 0 = 0       |
+            // N | 1 | N && 0 = 0       |
+            // N | N | 1 && 1 = 1       |
+            return Expression.AndAlso(
+                Expression.OrElse(
+                    Expression.Equal(left, right),
+                    Expression.AndAlso(
+                        BuildIsNullExpression(leftNullables),
+                        BuildIsNullExpression(rightNullables)
+                    )
+                ),
+                Expression.OrElse(
+                    Expression.AndAlso(
+                        BuildIsNotNullExpression(leftNullables),
+                        BuildIsNotNullExpression(rightNullables)
+                    ),
+                    Expression.AndAlso(
+                        BuildIsNullExpression(leftNullables),
+                        BuildIsNullExpression(rightNullables)
+                    )
+                )
+            );
+        }
+
+        private Expression ExpandNegatedNullableEqualNullable(
+            Expression left,
+            Expression right, 
+            List<Expression> leftNullables,
+            List<Expression> rightNullables)
+        {
+            return Expression.AndAlso(
+                Expression.OrElse(
+                    Expression.NotEqual(left, right),
+                    Expression.AndAlso(
+                        BuildIsNullExpression(leftNullables),
+                        BuildIsNullExpression(rightNullables)
+                    )
+                ),
+                Expression.AndAlso(
+                    Expression.OrElse(
+                        BuildIsNullExpression(leftNullables),
+                        BuildIsNotNullExpression(rightNullables)
+                    ),
+                    Expression.OrElse(
+                        BuildIsNotNullExpression(leftNullables),
+                        BuildIsNullExpression(rightNullables)
+                    )
+                )
+            );
         }
 
         private Expression BuildIsNullExpression(List<Expression> nullableExpressions)
@@ -293,68 +313,10 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
 
         private List<Expression> ExtractNullableExpressions(Expression expression)
         {
-            var nullableExpressionsExtractor = new NullableExpressionsExtractor(_parameterValues);
+            var nullableExpressionsExtractor = new NullableExpressionsExtractingVisitor(_parameterValues);
             nullableExpressionsExtractor.VisitExpression(expression);
 
             return nullableExpressionsExtractor.NullableExpressions;
-        }
-
-        private class NullableExpressionsExtractor : ExpressionTreeVisitor
-        {
-            IDictionary<string, object> _parameterValues;
-
-            public NullableExpressionsExtractor(IDictionary<string, object> parameterValues)
-            {
-                _parameterValues = parameterValues;
-                NullableExpressions = new List<Expression>();
-            }
-
-            public List<Expression> NullableExpressions { get; private set; }
-
-            protected override Expression VisitConstantExpression(ConstantExpression expression)
-            {
-                if (expression.Value == null)
-                {
-                    NullableExpressions.Add(expression);
-                }
-
-                return base.VisitConstantExpression(expression);
-            }
-
-            protected override Expression VisitParameterExpression(ParameterExpression expression)
-            {
-                if (_parameterValues[expression.Name] == null)
-                {
-                    NullableExpressions.Add(expression);
-                }
-
-                return base.VisitParameterExpression(expression);
-            }
-
-            protected override Expression VisitExtensionExpression(ExtensionExpression expression)
-            {
-                var columnExpression = expression as ColumnExpression;
-                if (columnExpression != null && columnExpression.Property.IsNullable)
-                {
-                    NullableExpressions.Add(expression);
-
-                    return expression;
-                }
-
-                var isNullExpression = expression as IsNullExpression;
-                if (isNullExpression != null)
-                {
-                    return expression;
-                }
-
-                var inExpression = expression as InExpression;
-                if (inExpression != null)
-                {
-                    return expression;
-                }
-
-                return base.VisitExtensionExpression(expression);
-            }
         }
     }
 }

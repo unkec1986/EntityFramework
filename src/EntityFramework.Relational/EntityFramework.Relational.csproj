@@ -158,6 +158,7 @@
     <Compile Include="Query\Expressions\MinExpression.cs" />
     <Compile Include="Query\Expressions\SumExpression.cs" />
     <Compile Include="Query\Expressions\TableExpressionBase.cs" />
+    <Compile Include="Query\ExpressionTreeVisitors\NullableExpressionsExtractingVisitor.cs" />
     <Compile Include="Query\ExpressionTreeVisitors\PredicateNegationExpressionOptimizer.cs" />
     <Compile Include="Query\ExpressionTreeVisitors\PredicateNullSemanticsExpandingVisitor.cs" />
     <Compile Include="Query\ExpressionTreeVisitors\SqlTranslatingExpressionTreeVisitor.cs" />
