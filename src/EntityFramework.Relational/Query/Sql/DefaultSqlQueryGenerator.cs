@@ -10,6 +10,7 @@ using System.Linq.Expressions;
 using System.Text;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Relational.Query.Expressions;
+using Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors;
 using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Parsing;
@@ -106,7 +107,10 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
                 }
                 else
                 {
-                    VisitExpression(selectExpression.Predicate);
+                    var nullSemanticsExpanded =
+                        new PredicateNullSemanticsExpandingVisitor().VisitExpression(selectExpression.Predicate);
+
+                    VisitExpression(nullSemanticsExpanded);
 
                     if (selectExpression.Predicate is ColumnExpression
                         || selectExpression.Predicate is ParameterExpression)

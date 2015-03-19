@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq.Expressions;
 using Microsoft.Data.Entity.Relational.Query.Expressions;
 using Remotion.Linq.Clauses.Expressions;
@@ -11,6 +12,12 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
 {
     public class PredicateNullSemanticsExpandingVisitor : ExpressionTreeVisitor
     {
+        Dictionary<string, object> _parameterValues;
+
+        public PredicateNullSemanticsExpandingVisitor(Dictionary<string, object> parameterValues)
+        {
+            _parameterValues = parameterValues;
+        }
         protected override Expression VisitBinaryExpression(BinaryExpression expression)
         {
             if (expression.NodeType == ExpressionType.Equal || expression.NodeType == ExpressionType.NotEqual)
@@ -18,8 +25,10 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                 var left = VisitExpression(expression.Left);
                 var right = VisitExpression(expression.Right);
 
-                var leftNullable = IsNullable(left);
-                var rightNullable = IsNullable(right);
+                var leftNullables = ExtractNullableExpressions(expression.Left);
+                var rightNullables = ExtractNullableExpressions(expression.Right);
+                var leftNullable = leftNullables.Count > 0;
+                var rightNullable = rightNullables.Count > 0;
 
                 if (expression.NodeType == ExpressionType.Equal)
                 {
@@ -121,8 +130,6 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
 
                 if (expression.NodeType == ExpressionType.NotEqual)
                 {
-
-
                     if (leftNullable && rightNullable)
                     {
                         // [(a != b) && (a != null || b != null)] || [(a == null && b != null) || (a != null && b == null)]
@@ -225,88 +232,139 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
             return base.VisitBinaryExpression(expression);
         }
 
-
-        private bool IsNullable(Expression expression)
+        private List<Expression> ExtractNullableExpressions(Expression expression)
         {
-            var nullabilityChecker = new ExpressionNullabilityChecker();
-            nullabilityChecker.VisitExpression(expression);
+            var nullableExpressionsExtractor = new NullableExpressionsExtractor(_parameterValues);
+            _nullableExpressionsExtractor.VisitExpression(expression);
 
-            return nullabilityChecker.IsNullable;
+            return _nullableExpressionsExtractor.NullableExpressions;
         }
 
-        private class ExpressionNullabilityChecker : ExpressionTreeVisitor
+        private class NullableExpressionsExtractor : ExpressionTreeVisitor
         {
-            public bool IsNullable { get; private set; }
+            Dictionary<string, object> _parameterValues;
 
-            public ExpressionNullabilityChecker()
+            public NullableExpressionsExtractor(Dictionary<string, object> parameterValues)
             {
-                IsNullable = false;
+                _parameterValues = parameterValues;
+                NullableExpressions = new List<Expression>();
             }
 
-            protected override Expression VisitBinaryExpression(BinaryExpression expression)
-            {
-                // TODO: optimize for cases like true || some_nullable_expression
-
-                VisitExpression(expression.Left);
-                VisitExpression(expression.Right);
-
-                return expression;
-            }
-
-            protected override Expression VisitUnaryExpression(UnaryExpression expression)
-            {
-                VisitExpression(expression.Operand);
-
-                return expression;
-            }
+            public List<Expression> NullableExpressions { get; private set; }
 
             protected override Expression VisitConstantExpression(ConstantExpression expression)
             {
-                IsNullable = expression.Value == null;
+                if (expression.Value == null)
+                {
+                    NullableExpressions.Add(expression);
+                }
 
-                return expression;
+                return base.VisitConstantExpression(expression);
+            }
+
+            protected override Expression VisitParameterExpression(ParameterExpression expression)
+            {
+                if (_parameterValues[expression.Name] == null)
+                {
+                    NullableExpressions.Add(expression);
+                }
+
+                return base.VisitParameterExpression(expression);
             }
 
             protected override Expression VisitExtensionExpression(ExtensionExpression expression)
             {
-                var relationalBinary = expression as RelationalBinaryExpression;
-                if (relationalBinary != null)
-                {
-                    // we assume those are always optimized
-                    IsNullable = false;
-
-                    return expression;
-                }
-
                 var columnExpression = expression as ColumnExpression;
-                if (columnExpression != null)
+                if (columnExpression != null && columnExpression.Property.IsNullable)
                 {
-                    IsNullable = columnExpression.Property.IsNullable;
+                    NullableExpressions.Add(expression);
 
-                    return expression;
+                    return base.VisitExtensionExpression(expression);
                 }
 
                 var isNullExpression = expression as IsNullExpression;
                 if (isNullExpression != null)
                 {
-                    IsNullable = false;
-
                     return expression;
                 }
 
                 var isNotNullExpression = expression as IsNotNullExpression;
                 if (isNotNullExpression != null)
                 {
-                    IsNullable = false;
-
                     return expression;
                 }
 
-                throw new InvalidOperationException("Unknown node!");
-
-                //return base.VisitExtensionExpression(expression);
+                return base.VisitExtensionExpression(expression);
             }
         }
 
+        //private class ExpressionNullabilityChecker : ExpressionTreeVisitor
+        //{
+        //    Dictionary<string, object> _parameterValues;
+
+        //    public ExpressionNullabilityChecker(Dictionary<string, object> parameterValues)
+        //    {
+        //        _parameterValues = parameterValues;
+        //    }
+
+        //    public bool IsNullable { get; set; }
+
+        //    protected override Expression VisitConstantExpression(ConstantExpression expression)
+        //    {
+        //        IsNullable = expression.Value == null;
+
+        //        return expression;
+        //    }
+
+        //    protected override Expression VisitExtensionExpression(ExtensionExpression expression)
+        //    {
+        //        var relationalBinary = expression as RelationalBinaryExpression;
+        //        if (relationalBinary != null)
+        //        {
+        //            // we assume those are always optimized
+        //            IsNullable = false;
+
+        //            return expression;
+        //        }
+
+        //        var columnExpression = expression as ColumnExpression;
+        //        if (columnExpression != null)
+        //        {
+        //            IsNullable = columnExpression.Property.IsNullable;
+
+        //            return expression;
+        //        }
+
+        //        var isNullExpression = expression as IsNullExpression;
+        //        if (isNullExpression != null)
+        //        {
+        //            IsNullable = false;
+
+        //            return expression;
+        //        }
+
+        //        var isNotNullExpression = expression as IsNotNullExpression;
+        //        if (isNotNullExpression != null)
+        //        {
+        //            IsNullable = false;
+
+        //            return expression;
+        //        }
+
+        //        throw new InvalidOperationException("Unknown node!");
+
+        //        //return base.VisitExtensionExpression(expression);
+        //    }
+
+        //    protected override Expression VisitParameterExpression(ParameterExpression expression)
+        //    {
+        //        if (_parameterValues[expression.Name] == null)
+        //        {
+        //            IsNullable = true;
+        //        }
+
+        //        return expression;
+        //    }
+        //}
     }
 }
