@@ -108,7 +108,8 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
                 else
                 {
                     var nullSemanticsExpanded =
-                        new PredicateNullSemanticsExpandingVisitor().VisitExpression(selectExpression.Predicate);
+                        new PredicateNullSemanticsExpandingVisitor(_parameterValues)
+                        .VisitExpression(selectExpression.Predicate);
 
                     VisitExpression(nullSemanticsExpanded);
 
@@ -293,13 +294,13 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
             var inValues = ProcessInExpressionValues(inExpression.Values);
             if (inValues.Count > 0)
             {
-                VisitExpression(inExpression.Column);
+            VisitExpression(inExpression.Column);
 
-                _sql.Append(" IN (");
+            _sql.Append(" IN (");
 
                 VisitJoin(inValues);
 
-                _sql.Append(")");
+            _sql.Append(")");
             }
             else
             {
@@ -314,13 +315,13 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
             var inValues = ProcessInExpressionValues(inExpression.Values);
             if (inValues.Count > 0)
             {
-                VisitExpression(inExpression.Column);
+            VisitExpression(inExpression.Column);
 
-                _sql.Append(" NOT IN (");
+            _sql.Append(" NOT IN (");
 
                 VisitJoin(inValues);
 
-                _sql.Append(")");
+            _sql.Append(")");
             }
             else
             {
@@ -356,8 +357,8 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
                         foreach (var value in valuesCollection)
                         {
                             inConstants.Add(Expression.Constant(value));
+                            }
                         }
-                    }
                     else
                     {
                         inConstants.Add(inParameter);
@@ -366,7 +367,7 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
             }
 
             return inConstants;
-        }
+            }
 
         public virtual Expression VisitInnerJoinExpression(InnerJoinExpression innerJoinExpression)
         {
@@ -604,7 +605,7 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
                         return
                             binaryExpression.NodeType == ExpressionType.Equal
                                 ? (Expression)new IsNullExpression(columnExpression)
-                                : new IsNotNullExpression(columnExpression);
+                                : Expression.Not(new IsNullExpression(columnExpression));
                     }
                 }
             }
@@ -640,7 +641,7 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
             return isNullExpression;
         }
 
-        public virtual Expression VisitIsNotNullExpression(IsNotNullExpression isNotNullExpression)
+        public virtual Expression VisitIsNotNullExpression(IsNullExpression isNotNullExpression)
         {
             Check.NotNull(isNotNullExpression, nameof(isNotNullExpression));
 
@@ -680,14 +681,19 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
             if (unaryExpression.NodeType == ExpressionType.Not)
             {
                 var inExpression = unaryExpression.Operand as InExpression;
-
                 if (inExpression != null)
                 {
                     return VisitNotInExpression(inExpression);
                 }
 
-                var isColumnOrParameterOperand =
-                    unaryExpression.Operand is ColumnExpression
+                var isNullExpression = unaryExpression.Operand as IsNullExpression;
+                if (isNullExpression != null)
+                {
+                    return VisitIsNotNullExpression(isNullExpression);
+                }
+
+                var isColumnOrParameterOperand = 
+                    unaryExpression.Operand is ColumnExpression 
                     || unaryExpression.Operand is ParameterExpression;
 
                 if (!isColumnOrParameterOperand)

@@ -19,38 +19,38 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                 { ExpressionType.LessThan, ExpressionType.GreaterThanOrEqual },
             };
 
-        protected override Expression VisitBinaryExpression(
-            [NotNull]BinaryExpression expression)
-        {
-            var currentExpression = expression;
-            if (currentExpression.NodeType == ExpressionType.Equal 
-                || currentExpression.NodeType == ExpressionType.NotEqual)
-            {
-                var leftUnary = currentExpression.Left as UnaryExpression;
-                if (leftUnary != null && leftUnary.NodeType == ExpressionType.Not)
-                {
-                    // e.g. !a == b -> a != b
-                    currentExpression = currentExpression.NodeType == ExpressionType.Equal
-                        ? Expression.MakeBinary(
-                            ExpressionType.NotEqual, leftUnary.Operand, currentExpression.Right)
-                        : Expression.MakeBinary(
-                            ExpressionType.Equal, leftUnary.Operand, currentExpression.Right);
-                }
+        //protected override Expression VisitBinaryExpression(
+        //    [NotNull]BinaryExpression expression)
+        //{
+        //    var currentExpression = expression;
+        //    if (currentExpression.NodeType == ExpressionType.Equal 
+        //        || currentExpression.NodeType == ExpressionType.NotEqual)
+        //    {
+        //        var leftUnary = currentExpression.Left as UnaryExpression;
+        //        if (leftUnary != null && leftUnary.NodeType == ExpressionType.Not)
+        //        {
+        //            // e.g. !a == b -> a != b
+        //            currentExpression = currentExpression.NodeType == ExpressionType.Equal
+        //                ? Expression.MakeBinary(
+        //                    ExpressionType.NotEqual, leftUnary.Operand, currentExpression.Right)
+        //                : Expression.MakeBinary(
+        //                    ExpressionType.Equal, leftUnary.Operand, currentExpression.Right);
+        //        }
 
-                var rightUnary = currentExpression.Right as UnaryExpression;
-                if (rightUnary != null && rightUnary.NodeType == ExpressionType.Not)
-                {
-                    // e.g. a != !b -> a == b
-                    currentExpression = currentExpression.NodeType == ExpressionType.Equal
-                        ? Expression.MakeBinary(
-                            ExpressionType.NotEqual, currentExpression.Left, rightUnary.Operand)
-                        : Expression.MakeBinary(
-                            ExpressionType.Equal, currentExpression.Left, rightUnary.Operand);
-                }
-            }
+        //        var rightUnary = currentExpression.Right as UnaryExpression;
+        //        if (rightUnary != null && rightUnary.NodeType == ExpressionType.Not)
+        //        {
+        //            // e.g. a != !b -> a == b
+        //            currentExpression = currentExpression.NodeType == ExpressionType.Equal
+        //                ? Expression.MakeBinary(
+        //                    ExpressionType.NotEqual, currentExpression.Left, rightUnary.Operand)
+        //                : Expression.MakeBinary(
+        //                    ExpressionType.Equal, currentExpression.Left, rightUnary.Operand);
+        //        }
+        //    }
 
-            return base.VisitBinaryExpression(currentExpression);
-        }
+        //    return base.VisitBinaryExpression(currentExpression);
+        //}
 
         protected override Expression VisitUnaryExpression(
             [NotNull]UnaryExpression expression)

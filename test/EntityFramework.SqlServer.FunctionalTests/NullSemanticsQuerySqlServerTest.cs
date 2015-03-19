@@ -29,6 +29,15 @@ WHERE (([e].[NullableBoolA] = [e].[NullableBoolB]) OR ([e].[NullableBoolA] IS NU
                 Sql);
         }
 
+        public override void Compare_negated_bool_with_bool_equal()
+        {
+            base.Compare_negated_bool_with_bool_equal();
+
+            Assert.Equal(
+    @"",
+    Sql);
+        }
+
         private static string Sql
         {
             get { return TestSqlLoggerFactory.Sql; }

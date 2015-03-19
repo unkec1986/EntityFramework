@@ -25,6 +25,14 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                 currentExpression = inExpressionOptimized;
             }
 
+            var negationOptimized1 =
+                new PredicateNegationExpressionOptimizer().VisitExpression(currentExpression);
+
+            if (negationOptimized1 != null)
+            {
+                currentExpression = negationOptimized1;
+            }
+
             var equalityExpanded = 
                 new EqualityPredicateExpandingVisitor().VisitExpression(currentExpression);
 
@@ -33,21 +41,21 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
                 currentExpression = equalityExpanded;
             }
 
-            var negationOptimized =
+            var negationOptimized2 =
                 new PredicateNegationExpressionOptimizer().VisitExpression(currentExpression);
 
-            if (negationOptimized != null)
+            if (negationOptimized2 != null)
             {
-                currentExpression = negationOptimized;
+                currentExpression = negationOptimized2;
             }
 
-            var nullSemanticsExpanded =
-                new PredicateNullSemanticsExpandingVisitor().VisitExpression(currentExpression);
+            //var nullSemanticsExpanded =
+            //    new PredicateNullSemanticsExpandingVisitor().VisitExpression(currentExpression);
 
-            if (nullSemanticsExpanded != null)
-            {
-                currentExpression = nullSemanticsExpanded;
-            }
+            //if (nullSemanticsExpanded != null)
+            //{
+            //    currentExpression = nullSemanticsExpanded;
+            //}
 
             return currentExpression;
         }
