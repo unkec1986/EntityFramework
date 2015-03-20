@@ -5,22 +5,17 @@ using System.Linq.Expressions;
 using Microsoft.Data.Entity.Relational.Query.Expressions;
 using JetBrains.Annotations;
 using Remotion.Linq.Parsing;
-using System.Collections.Generic;
 
 namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
 {
     public class EqualityPredicateExpandingVisitor : ExpressionTreeVisitor
     {
-        private IDictionary<string, object> _parameterValues;
-
-        public EqualityPredicateExpandingVisitor(IDictionary<string, object> parameterValues)
-        {
-            _parameterValues = parameterValues;
-        }
-
         protected override Expression VisitBinaryExpression(
             [NotNull]BinaryExpression expression)
         {
+            var left = VisitExpression(expression.Left);
+            var right = VisitExpression(expression.Right);
+
             if ((expression.NodeType == ExpressionType.Equal
                 || expression.NodeType == ExpressionType.NotEqual)
                 && expression.Left.Type == typeof(bool)
@@ -36,44 +31,42 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
 
                 if (complexLeft || complexRight)
                 {
-                    var leftNullable = ExtractNullableExpressions(expression.Left).Count > 0;
-                    var rightNullable = ExtractNullableExpressions(expression.Right).Count > 0;
-
-                    if (!leftNullable && !rightNullable)
                     {
-                        var left = VisitExpression(expression.Left);
-                        var right = VisitExpression(expression.Right);
-
                         return expression.NodeType == ExpressionType.Equal ?
-                            Expression.OrElse(
-                                Expression.AndAlso(
-                                    left,
-                                    right),
-                                Expression.AndAlso(
-                                    Expression.Not(expression.Left),
-                                    Expression.Not(right)))
-                            : Expression.OrElse(
-                                Expression.AndAlso(
-                                    left,
-                                    Expression.Not(right)),
-                                Expression.AndAlso(
-                                    Expression.Not(left),
-                                    right));
+                            Expression.Equal(
+                                new CaseExpression(left),
+                                new CaseExpression(right))
+                            : Expression.NotEqual(
+                                new CaseExpression(left),
+                                new CaseExpression(right));
+
+                        //return expression.NodeType == ExpressionType.Equal ?
+                        //    Expression.OrElse(
+                        //        Expression.AndAlso(
+                        //            left,
+                        //            right),
+                        //        Expression.AndAlso(
+                        //            Expression.Not(left),
+                        //            Expression.Not(right)))
+                        //    : Expression.OrElse(
+                        //        Expression.AndAlso(
+                        //            left,
+                        //            Expression.Not(right)),
+                        //        Expression.AndAlso(
+                        //            Expression.Not(left),
+                        //            right));
                     }
                 }
             }
 
-            return base.VisitBinaryExpression(expression);
-        }
-
-        private List<Expression> ExtractNullableExpressions(Expression expression)
-        {
-            var nullableExpressionsExtractor = new NullableExpressionsExtractingVisitor(
-                _parameterValues);
-
-            nullableExpressionsExtractor.VisitExpression(expression);
-
-            return nullableExpressionsExtractor.NullableExpressions;
+            if (left == expression.Left && right == expression.Right)
+            {
+                return expression;
+            }
+            else
+            {
+                return Expression.MakeBinary(expression.NodeType, left, right);
+            }
         }
     }
 }

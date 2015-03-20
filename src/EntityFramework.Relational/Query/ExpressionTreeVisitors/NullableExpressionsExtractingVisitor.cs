@@ -48,6 +48,12 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
 
         protected override Expression VisitExtensionExpression(ExtensionExpression expression)
         {
+            var notNullableExpression = expression as NotNullableExpression;
+            if (notNullableExpression != null)
+            {
+                return expression;
+            }
+
             var columnExpression = expression as ColumnExpression;
             if (columnExpression != null && columnExpression.Property.IsNullable)
             {

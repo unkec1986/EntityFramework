@@ -111,7 +111,10 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
                         new PredicateNullSemanticsExpandingVisitor(_parameterValues)
                         .VisitExpression(selectExpression.Predicate);
 
-                    VisitExpression(nullSemanticsExpanded);
+                    var reduced = new ReducingExpressionVisitor()
+                        .VisitExpression(nullSemanticsExpanded);
+
+                    VisitExpression(reduced);
 
                     if (selectExpression.Predicate is ColumnExpression
                         || selectExpression.Predicate is ParameterExpression)
@@ -483,6 +486,7 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
 
             var needClosingParen = false;
 
+            var foo = binaryExpression.Left is BinaryExpression;
             var leftBinaryExpression = binaryExpression.Left as BinaryExpression;
 
             if (leftBinaryExpression != null
@@ -815,6 +819,20 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
             Check.NotEmpty(identifier, nameof(identifier));
 
             return "\"" + identifier + "\"";
+        }
+
+        private class ReducingExpressionVisitor : ExpressionTreeVisitor
+        {
+            public override Expression VisitExpression(Expression node)
+            {
+                if (node != null && node.CanReduce)
+                {
+                    var reduced = node.Reduce();
+                    return base.VisitExpression(reduced);
+                }
+
+                return base.VisitExpression(node);
+            }
         }
     }
 }

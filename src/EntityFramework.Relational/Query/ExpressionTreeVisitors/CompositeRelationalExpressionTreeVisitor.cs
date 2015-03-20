@@ -12,7 +12,8 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
     {
         private IDictionary<string, object> _parameterValues;
 
-        public CompositePredicateExpressionTreeVisitor(IDictionary<string, object> parameterValues)
+        public CompositePredicateExpressionTreeVisitor(
+            IDictionary<string, object> parameterValues)
         {
             _parameterValues = parameterValues;
         }
@@ -24,37 +25,59 @@ namespace Microsoft.Data.Entity.Relational.Query.ExpressionTreeVisitors
             var inExpressionOptimized = 
                 new EqualityPredicateInExpressionOptimizer().VisitExpression(currentExpression);
 
-            if (inExpressionOptimized != null)
-            {
-                currentExpression = inExpressionOptimized;
-            }
+            currentExpression = inExpressionOptimized;
 
-            var negationOptimized =
+            var negationOptimized1 =
                 new PredicateNegationExpressionOptimizer(_parameterValues)
                 .VisitExpression(currentExpression);
 
-            if (negationOptimized != null)
-            {
-                currentExpression = negationOptimized;
-            }
+            currentExpression = negationOptimized1;
 
             var equalityExpanded =
-                new EqualityPredicateExpandingVisitor(_parameterValues).VisitExpression(currentExpression);
+                new EqualityPredicateExpandingVisitor().VisitExpression(currentExpression);
 
-            if (equalityExpanded != null)
+            currentExpression = equalityExpanded;
+
+            var negationOptimized2 =
+                new PredicateNegationExpressionOptimizer(_parameterValues)
+                .VisitExpression(currentExpression);
+
+            currentExpression = negationOptimized2;
+
+            if (_parameterValues.Count == 0)
             {
-                currentExpression = equalityExpanded;
+                var parameterFindingVisitor = new ParameterFindingVisitor();
+                parameterFindingVisitor.VisitExpression(currentExpression);
+                if (!parameterFindingVisitor.ContainsParametes)
+                {
+                    var nullSemanticsExpanded =
+                        new PredicateNullSemanticsExpandingVisitor(_parameterValues)
+                        .VisitExpression(currentExpression);
+
+                    currentExpression = nullSemanticsExpanded;
+                }
             }
 
-            var nullSemanticsExpanded =
-                new PredicateNullSemanticsExpandingVisitor(_parameterValues).VisitExpression(currentExpression);
+            var negationOptimized3 =
+                new PredicateNegationExpressionOptimizer(_parameterValues)
+                .VisitExpression(currentExpression);
 
-            if (nullSemanticsExpanded != null)
-            {
-                currentExpression = nullSemanticsExpanded;
-            }
+            currentExpression = negationOptimized3;
 
             return currentExpression;
+        }
+
+        private class ParameterFindingVisitor : ExpressionTreeVisitor
+        {
+            private bool _containsParameters = false;
+            public bool ContainsParametes => _containsParameters;
+
+            protected override Expression VisitParameterExpression(ParameterExpression expression)
+            {
+                _containsParameters = true;
+
+                return expression;
+            }
         }
     }
 }

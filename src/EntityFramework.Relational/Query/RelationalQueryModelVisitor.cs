@@ -83,7 +83,8 @@ namespace Microsoft.Data.Entity.Relational.Query
         {
             base.VisitQueryModel(queryModel);
 
-            var compositePredicateVisitor = new CompositePredicateExpressionTreeVisitor();
+            var compositePredicateVisitor =  
+                new CompositePredicateExpressionTreeVisitor(new Dictionary<string, object>());
 
             foreach (var selectExpression in _queriesBySource.Values.Where(se => se.Predicate != null))
             {
