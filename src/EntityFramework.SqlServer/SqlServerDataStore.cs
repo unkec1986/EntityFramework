@@ -23,6 +23,7 @@ namespace Microsoft.Data.Entity.SqlServer
             [NotNull] IModel model,
             [NotNull] IEntityKeyFactorySource entityKeyFactorySource,
             [NotNull] IEntityMaterializerSource entityMaterializerSource,
+            [NotNull] IClrAccessorSource<IClrPropertyGetter> clrPropertyGetterSource,
             [NotNull] ISqlServerConnection connection,
             [NotNull] ISqlServerCommandBatchPreparer batchPreparer,
             [NotNull] ISqlServerBatchExecutor batchExecutor,
@@ -33,6 +34,7 @@ namespace Microsoft.Data.Entity.SqlServer
                 Check.NotNull(model, nameof(model)),
                 Check.NotNull(entityKeyFactorySource, nameof(entityKeyFactorySource)),
                 Check.NotNull(entityMaterializerSource, nameof(entityMaterializerSource)),
+                Check.NotNull(clrPropertyGetterSource, nameof(clrPropertyGetterSource)),
                 Check.NotNull(connection, nameof(connection)),
                 Check.NotNull(batchPreparer, nameof(batchPreparer)),
                 Check.NotNull(batchExecutor, nameof(batchExecutor)),
@@ -60,6 +62,7 @@ namespace Microsoft.Data.Entity.SqlServer
                 resultOperatorHandler,
                 EntityMaterializerSource,
                 EntityKeyFactorySource,
+                ClrPropertyGetterSource,
                 enumerableMethodProvider,
                 methodCallTranslator,
                 (ISqlServerValueBufferFactoryFactory)ValueBufferFactoryFactory);
