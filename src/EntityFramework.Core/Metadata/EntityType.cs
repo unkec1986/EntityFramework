@@ -922,10 +922,10 @@ namespace Microsoft.Data.Entity.Metadata
             entityType.UpdateOriginalValueIndexes();
         }
 
-        private void UpdateIndexes() => UpdateIndexes(BaseType?.PropertyCount ?? 0);
-
-        private void UpdateIndexes(int index)
+        private void UpdateIndexes()
         {
+            var index = BaseType?.PropertyCount ?? 0;
+
             foreach (var property in _properties.Values)
             {
                 property.Index = index++;
@@ -935,14 +935,14 @@ namespace Microsoft.Data.Entity.Metadata
 
             foreach (var derivedType in _derivedTypes)
             {
-                derivedType.UpdateIndexes(index);
+                derivedType.UpdateIndexes();
             }
         }
 
-        private void UpdateShadowIndexes() => UpdateShadowIndexes(BaseType?.ShadowPropertyCount ?? 0);
-
-        private void UpdateShadowIndexes(int shadowIndex)
+        private void UpdateShadowIndexes()
         {
+            var shadowIndex = BaseType?.ShadowPropertyCount ?? 0;
+
             foreach (var property in _properties.Values.Where(p => p.IsShadowProperty))
             {
                 property.SetShadowIndex(shadowIndex++);
@@ -952,14 +952,14 @@ namespace Microsoft.Data.Entity.Metadata
 
             foreach (var derivedType in _derivedTypes)
             {
-                derivedType.UpdateShadowIndexes(shadowIndex);
+                derivedType.UpdateShadowIndexes();
             }
         }
 
-        private void UpdateOriginalValueIndexes() => UpdateOriginalValueIndexes(BaseType?.OriginalValueCount ?? 0);
-
-        private void UpdateOriginalValueIndexes(int originalValueIndex)
+        private void UpdateOriginalValueIndexes()
         {
+            var originalValueIndex = BaseType?.OriginalValueCount ?? 0;
+
             foreach (var property in _properties.Values)
             {
                 property.SetOriginalValueIndex(
@@ -970,7 +970,7 @@ namespace Microsoft.Data.Entity.Metadata
 
             foreach (var derivedType in _derivedTypes)
             {
-                derivedType.UpdateOriginalValueIndexes(originalValueIndex);
+                derivedType.UpdateOriginalValueIndexes();
             }
         }
 
