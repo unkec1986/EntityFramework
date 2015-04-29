@@ -18,18 +18,26 @@ namespace Microsoft.Data.Entity.Metadata
     {
         private static readonly char[] _simpleNameChars = { '.', '+' };
 
-        private readonly SortedDictionary<IReadOnlyList<Property>, ForeignKey> _foreignKeys;
-        private readonly SortedDictionary<string, Navigation> _navigations;
-        private readonly SortedDictionary<IReadOnlyList<Property>, Index> _indexes;
+        private readonly SortedDictionary<IReadOnlyList<Property>, ForeignKey> _foreignKeys
+            = new SortedDictionary<IReadOnlyList<Property>, ForeignKey>(PropertyListComparer.Instance);
+
+        private readonly SortedDictionary<string, Navigation> _navigations
+            = new SortedDictionary<string, Navigation>(StringComparer.Ordinal);
+
+        private readonly SortedDictionary<IReadOnlyList<Property>, Index> _indexes
+            = new SortedDictionary<IReadOnlyList<Property>, Index>(PropertyListComparer.Instance);
+
         private readonly SortedDictionary<string, Property> _properties;
-        private readonly SortedDictionary<IReadOnlyList<Property>, Key> _keys;
+
+        private readonly SortedDictionary<IReadOnlyList<Property>, Key> _keys
+            = new SortedDictionary<IReadOnlyList<Property>, Key>(PropertyListComparer.Instance);
 
         private readonly object _typeOrName;
 
         private Key _primaryKey;
-
         private EntityType _baseType;
-        private readonly HashSet<EntityType> _derivedTypes;
+
+        private IEnumerable<EntityType> DerivedTypes => Model.EntityTypes.Where(t => t.BaseType == this);
 
         private int _propertyCount;
         private int _shadowPropertyCount;
@@ -71,13 +79,7 @@ namespace Microsoft.Data.Entity.Metadata
 
             Model = model;
 
-            _foreignKeys = new SortedDictionary<IReadOnlyList<Property>, ForeignKey>(PropertyListComparer.Instance);
-            _navigations = new SortedDictionary<string, Navigation>(StringComparer.Ordinal);
-            _indexes = new SortedDictionary<IReadOnlyList<Property>, Index>(PropertyListComparer.Instance);
             _properties = new SortedDictionary<string, Property>(new PropertyComparer(this));
-            _keys = new SortedDictionary<IReadOnlyList<Property>, Key>(PropertyListComparer.Instance);
-
-            _derivedTypes = new HashSet<EntityType>();
         }
 
         public virtual Type ClrType => _typeOrName as Type;
@@ -95,11 +97,15 @@ namespace Microsoft.Data.Entity.Metadata
                     return;
                 }
 
-                _baseType?._derivedTypes.Remove(this);
                 _baseType = null;
 
                 if (value != null)
                 {
+                    if (Model != value.Model)
+                    {
+                        throw new InvalidOperationException(Strings.BaseEntityTypeWrongModel(this, value));
+                    }
+
                     if (value.InheritsFrom(this))
                     {
                         throw new InvalidOperationException(Strings.CircularInheritance(this, value));
@@ -123,7 +129,6 @@ namespace Microsoft.Data.Entity.Metadata
                                 string.Join(", ", collisions.Select(p => p.Name))));
                     }
 
-                    value._derivedTypes.Add(this);
                     _baseType = value;
                 }
 
@@ -812,7 +817,7 @@ namespace Microsoft.Data.Entity.Metadata
 
         private IEnumerable<Property> FindDerivedProperties(string[] propertyNames)
         {
-            foreach (var derivedType in _derivedTypes)
+            foreach (var derivedType in DerivedTypes)
             {
                 foreach (var propertyName in propertyNames.Where(name => derivedType._properties.ContainsKey(name)))
                 {
@@ -910,7 +915,7 @@ namespace Microsoft.Data.Entity.Metadata
 
         public virtual void PropertyMetadataChanged([CanBeNull] Property property)
         {
-            if(property != null)
+            if (property != null)
             {
                 ValidateAgainstClrProperty(property);
             }
@@ -933,7 +938,7 @@ namespace Microsoft.Data.Entity.Metadata
 
             _propertyCount = index;
 
-            foreach (var derivedType in _derivedTypes)
+            foreach (var derivedType in DerivedTypes)
             {
                 derivedType.UpdateIndexes();
             }
@@ -950,7 +955,7 @@ namespace Microsoft.Data.Entity.Metadata
 
             _shadowPropertyCount = shadowIndex;
 
-            foreach (var derivedType in _derivedTypes)
+            foreach (var derivedType in DerivedTypes)
             {
                 derivedType.UpdateShadowIndexes();
             }
@@ -968,7 +973,7 @@ namespace Microsoft.Data.Entity.Metadata
 
             _originalValueCount = originalValueIndex;
 
-            foreach (var derivedType in _derivedTypes)
+            foreach (var derivedType in DerivedTypes)
             {
                 derivedType.UpdateOriginalValueIndexes();
             }
