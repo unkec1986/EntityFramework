@@ -96,6 +96,8 @@ namespace Microsoft.Data.Entity.Commands.Migrations
                         GenerateProperties(entityType.GetProperties(), stringBuilder);
 
                         GenerateKey(entityType.GetPrimaryKey(), stringBuilder);
+
+                        GenerateIndexes(entityType.GetIndexes(), stringBuilder);
                     }
 
                     if ((options & GenerateEntityTypeOptions.Secondary) != 0)
@@ -202,6 +204,41 @@ namespace Microsoft.Data.Entity.Commands.Migrations
 
             stringBuilder.Append(";");
         }
+
+        protected virtual void GenerateIndexes(
+            [NotNull] IEnumerable<IIndex> Indexes, [NotNull] IndentedStringBuilder stringBuilder)
+        {
+            Check.NotNull(Indexes, nameof(Indexes));
+            Check.NotNull(stringBuilder, nameof(stringBuilder));
+
+            foreach (var index in Indexes)
+            {
+                GenerateIndex(index, stringBuilder);
+            }
+        }
+
+        protected virtual void GenerateIndex(
+            [NotNull] IIndex index, [NotNull] IndentedStringBuilder stringBuilder)
+        {
+            Check.NotNull(index, nameof(index));
+            Check.NotNull(stringBuilder, nameof(stringBuilder));
+
+            Check.NotNull(stringBuilder, nameof(stringBuilder));
+
+            stringBuilder
+                .AppendLine()
+                .Append("b.Index(")
+                .Append(string.Join(", ", index.Properties.Select(p => _code.Literal(p.Name))))
+                .Append(")");
+
+            using (stringBuilder.Indent())
+            {
+                GenerateAnnotations(index.Annotations.ToArray(), stringBuilder);
+            }
+
+            stringBuilder.Append(";");
+        }
+
 
         protected virtual void GenerateEntityTypeAnnotations([NotNull] IEntityType entityType, [NotNull] IndentedStringBuilder stringBuilder)
         {
