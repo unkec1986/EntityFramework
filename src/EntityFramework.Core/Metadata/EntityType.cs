@@ -37,11 +37,7 @@ namespace Microsoft.Data.Entity.Metadata
         private Key _primaryKey;
         private EntityType _baseType;
 
-        private IEnumerable<EntityType> DerivedTypes => Model.EntityTypes.Where(t => t.BaseType == this);
-
-        private int _propertyCount;
         private int _shadowPropertyCount;
-        private int _originalValueCount;
 
         private bool _useEagerSnapshots;
 
@@ -101,11 +97,6 @@ namespace Microsoft.Data.Entity.Metadata
 
                 if (value != null)
                 {
-                    if (Model != value.Model)
-                    {
-                        throw new InvalidOperationException(Strings.BaseEntityTypeWrongModel(this, value));
-                    }
-
                     if (value.InheritsFrom(this))
                     {
                         throw new InvalidOperationException(Strings.CircularInheritance(this, value));
@@ -152,6 +143,11 @@ namespace Microsoft.Data.Entity.Metadata
             return false;
         }
 
+        private IEnumerable<EntityType> GetDirectDescendents()
+        {
+            return this.GetDerivedTypes().Where(et => et.BaseType == this).Cast<EntityType>();
+        }
+
         public virtual bool IsAbstract => ClrType?.GetTypeInfo().IsAbstract ?? false;
 
         public virtual string Name
@@ -184,11 +180,9 @@ namespace Microsoft.Data.Entity.Metadata
 
         public override string ToString() => Name;
 
-        public virtual int PropertyCount => _propertyCount;
-
         public virtual int ShadowPropertyCount => _shadowPropertyCount;
 
-        public virtual int OriginalValueCount => _originalValueCount;
+        public virtual int PropertyCount => (BaseType?.PropertyCount ?? 0) + _properties.Count;
 
         public virtual bool HasClrType => ClrType != null;
 
@@ -205,7 +199,7 @@ namespace Microsoft.Data.Entity.Metadata
 
                 _useEagerSnapshots = value;
 
-                UpdateOriginalValueIndexes();
+                PropertyMetadataChanged(null);
             }
         }
 
@@ -255,9 +249,7 @@ namespace Microsoft.Data.Entity.Metadata
                 }
             }
 
-            UpdateIndexes();
-            UpdateShadowIndexes();
-            UpdateOriginalValueIndexes();
+            PropertyMetadataChanged(null);
 
             return _primaryKey;
         }
@@ -453,7 +445,7 @@ namespace Microsoft.Data.Entity.Metadata
 
             _foreignKeys.Add(properties, foreignKey);
 
-            UpdateOriginalValueIndexes();
+            PropertyMetadataChanged(null);
 
             return foreignKey;
         }
@@ -817,19 +809,12 @@ namespace Microsoft.Data.Entity.Metadata
 
         private IEnumerable<Property> FindDerivedProperties(string[] propertyNames)
         {
-            foreach (var derivedType in DerivedTypes)
-            {
-                foreach (var propertyName in propertyNames.Where(name => derivedType._properties.ContainsKey(name)))
-                {
-                    yield return derivedType._properties[propertyName];
-                }
+            var searchProperties = new HashSet<string>(propertyNames);
 
-                foreach (var property in derivedType.FindDerivedProperties(propertyNames))
-                {
-                    yield return property;
-                }
-            }
-            yield break;
+            return this.GetDerivedTypes()
+                .SelectMany(et => et.GetDeclaredProperties()
+                .Where(p => searchProperties.Contains(p.Name)))
+                .Cast<Property>();
         }
 
         IEnumerable<Property> FindPropertyCollisions(string propertyName)
@@ -915,67 +900,33 @@ namespace Microsoft.Data.Entity.Metadata
 
         public virtual void PropertyMetadataChanged([CanBeNull] Property property)
         {
-            if (property != null)
+            if (property != null && property.EntityType == this)
             {
                 ValidateAgainstClrProperty(property);
             }
 
-            var entityType = property?.EntityType ?? this;
-
-            entityType.UpdateIndexes();
-            entityType.UpdateShadowIndexes();
-            entityType.UpdateOriginalValueIndexes();
-        }
-
-        private void UpdateIndexes()
-        {
             var index = BaseType?.PropertyCount ?? 0;
+            var shadowIndex = BaseType?.ShadowPropertyCount() ?? 0;
+            var originalValueIndex = BaseType?.OriginalValueCount() ?? 0;
 
-            foreach (var property in _properties.Values)
+            foreach (var indexedProperty in _properties.Values)
             {
-                property.Index = index++;
-            }
+                indexedProperty.Index = index++;
 
-            _propertyCount = index;
+                if(indexedProperty.IsShadowProperty)
+                {
+                    indexedProperty.SetShadowIndex(shadowIndex++);
+                }
 
-            foreach (var derivedType in DerivedTypes)
-            {
-                derivedType.UpdateIndexes();
-            }
-        }
-
-        private void UpdateShadowIndexes()
-        {
-            var shadowIndex = BaseType?.ShadowPropertyCount ?? 0;
-
-            foreach (var property in _properties.Values.Where(p => p.IsShadowProperty))
-            {
-                property.SetShadowIndex(shadowIndex++);
+                indexedProperty.SetOriginalValueIndex(
+                    RequiresOriginalValue(indexedProperty) ? originalValueIndex++ : -1);
             }
 
             _shadowPropertyCount = shadowIndex;
 
-            foreach (var derivedType in DerivedTypes)
+            foreach(var derivedType in GetDirectDescendents())
             {
-                derivedType.UpdateShadowIndexes();
-            }
-        }
-
-        private void UpdateOriginalValueIndexes()
-        {
-            var originalValueIndex = BaseType?.OriginalValueCount ?? 0;
-
-            foreach (var property in _properties.Values)
-            {
-                property.SetOriginalValueIndex(
-                    RequiresOriginalValue(property) ? originalValueIndex++ : -1);
-            }
-
-            _originalValueCount = originalValueIndex;
-
-            foreach (var derivedType in DerivedTypes)
-            {
-                derivedType.UpdateOriginalValueIndexes();
+                derivedType.PropertyMetadataChanged(property);
             }
         }
 

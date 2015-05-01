@@ -917,14 +917,6 @@ namespace Microsoft.Data.Entity.Internal
         }
 
         /// <summary>
-        /// The entity type '{entityType}' cannot inherit '{baseEntityType}' because '{baseEntityType}' is not part of the same model.
-        /// </summary>
-        public static string BaseEntityTypeWrongModel([CanBeNull] object entityType, [CanBeNull] object baseEntityType)
-        {
-            return string.Format(CultureInfo.CurrentCulture, GetString("BaseEntityTypeWrongModel", "entityType", "baseEntityType"), entityType, baseEntityType);
-        }
-
-        /// <summary>
         /// The entity type '{entityType}' cannot inherit '{baseEntityType}' because '{baseEntityType}' is a descendent of '{entityType}'.
         /// </summary>
         public static string CircularInheritance([CanBeNull] object entityType, [CanBeNull] object baseEntityType)

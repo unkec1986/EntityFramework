@@ -67,16 +67,14 @@ namespace Microsoft.Data.Entity.Metadata
         {
             Check.NotNull(entityType, nameof(entityType));
 
-            return (entityType as EntityType)?.OriginalValueCount
-                ?? entityType.GetProperties().Count(p => p.GetOriginalValueIndex() >= 0);
+            return entityType.GetProperties().Count(p => p.GetOriginalValueIndex() >= 0);
         }
 
         public static int ShadowPropertyCount([NotNull] this IEntityType entityType)
         {
             Check.NotNull(entityType, nameof(entityType));
 
-            return (entityType as EntityType)?.ShadowPropertyCount
-                ?? entityType.GetProperties().Count(p => p.IsShadowProperty);
+            return entityType.GetProperties().Count(p => p.IsShadowProperty);
         }
 
         public static bool HasClrType([NotNull] this IEntityType entityType)
@@ -91,6 +89,13 @@ namespace Microsoft.Data.Entity.Metadata
             Check.NotNull(entityType, nameof(entityType));
 
             return entityType.BaseType?.RootType() ?? entityType;
+        }
+
+        public static IEnumerable<IProperty> GetDeclaredProperties([NotNull] this IEntityType entityType)
+        {
+            Check.NotNull(entityType, nameof(entityType));
+
+            return entityType.GetProperties().Where(p => p.EntityType == entityType);
         }
 
         public static IEnumerable<IPropertyBase> GetPropertiesAndNavigations(

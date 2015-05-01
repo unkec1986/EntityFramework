@@ -269,17 +269,6 @@ namespace Microsoft.Data.Entity.Tests.Metadata
         }
 
         [Fact]
-        public void Setting_base_type_throws_when_parent_not_from_same_model()
-        {
-            var a = new Model().AddEntityType(typeof(A));
-            var b = new Model().AddEntityType(typeof(B));
-
-            Assert.Equal(
-                Strings.BaseEntityTypeWrongModel(b, a),
-                Assert.Throws<InvalidOperationException>(() => b.BaseType = a).Message);
-        }
-
-        [Fact]
         public void Setting_base_type_throws_when_grandparent_contains_duplicate_property()
         {
             var model = new Model();

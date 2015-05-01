@@ -492,7 +492,4 @@
   <data name="DuplicatePropertiesOnBase" xml:space="preserve">
     <value>The type '{entityType}' cannot have base type '{baseType}' because both types include the properties: {properties}.</value>
   </data>
-  <data name="BaseEntityTypeWrongModel" xml:space="preserve">
-    <value>The entity type '{entityType}' cannot inherit '{baseEntityType}' because '{baseEntityType}' is not part of the same model.</value>
-  </data>
 </root>
