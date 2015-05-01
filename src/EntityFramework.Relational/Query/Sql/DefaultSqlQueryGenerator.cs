@@ -136,6 +136,8 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
                         }
                     }
 
+                    predicate = new ReducingExpressionVisitor().VisitExpression(predicate);
+
                     VisitExpression(predicate);
 
                     if (selectExpression.Predicate is ParameterExpression
@@ -917,6 +919,20 @@ namespace Microsoft.Data.Entity.Relational.Query.Sql
                 }
 
                 return base.VisitBinaryExpression(expression);
+            }
+        }
+
+        private class ReducingExpressionVisitor : ExpressionTreeVisitor
+        {
+            public override Expression VisitExpression(Expression node)
+            {
+                if (node != null && node.CanReduce)
+                {
+                    var reduced = node.Reduce();
+                    return base.VisitExpression(reduced);
+                }
+
+                return base.VisitExpression(node);
             }
         }
     }

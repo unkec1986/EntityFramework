@@ -19,6 +19,7 @@ using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Parsing;
+using Microsoft.Data.Entity.Query.Annotations;
 
 namespace Microsoft.Data.Entity.Relational.Query
 {
@@ -88,8 +89,9 @@ namespace Microsoft.Data.Entity.Relational.Query
         public override void VisitQueryModel(QueryModel queryModel)
         {
             base.VisitQueryModel(queryModel);
+            var compositePredicateVisitor = new CompositePredicateExpressionTreeVisitor(
+                QueryCompilationContext.QueryAnnotations.OfType<UseRelationalNullSemanticsQueryAnnotation>().Any());
 
-            var compositePredicateVisitor = new CompositePredicateExpressionTreeVisitor();
             foreach (var selectExpression in _queriesBySource.Values.Where(se => se.Predicate != null))
             {
                 selectExpression.Predicate
